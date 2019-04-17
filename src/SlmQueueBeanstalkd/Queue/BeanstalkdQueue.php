@@ -55,13 +55,14 @@ class BeanstalkdQueue extends AbstractQueue implements BeanstalkdQueueInterface
      */
     public function push(JobInterface $job, array $options = array())
     {
-        $identifier = $this->pheanstalk->putInTube(
-            $this->getTubeName(),
-            $this->serializeJob($job),
-            isset($options['priority']) ? $options['priority'] : Pheanstalk::DEFAULT_PRIORITY,
-            isset($options['delay']) ? $options['delay'] : Pheanstalk::DEFAULT_DELAY,
-            isset($options['ttr']) ? $options['ttr'] : Pheanstalk::DEFAULT_TTR
-        );
+        $identifier = $this->pheanstalk
+            ->useTube($this->getTubeName())
+            ->put(
+                $this->serializeJob($job),
+                isset($options['priority']) ? $options['priority'] : Pheanstalk::DEFAULT_PRIORITY,
+                isset($options['delay']) ? $options['delay'] : Pheanstalk::DEFAULT_DELAY,
+                isset($options['ttr']) ? $options['ttr'] : Pheanstalk::DEFAULT_TTR
+            );
 
         $job->setId($identifier);
     }
@@ -76,10 +77,13 @@ class BeanstalkdQueue extends AbstractQueue implements BeanstalkdQueueInterface
      */
     public function pop(array $options = array())
     {
-        $job = $this->pheanstalk->reserveFromTube(
-            $this->getTubeName(),
-            isset($options['timeout']) ? $options['timeout'] : null
-        );
+        $this->pheanstalk->watchOnly($this->getTubeName());
+
+        if (isset($options['timeout']) && (int)$options['timeout'] > 0) {
+            $job = $this->pheanstalk->reserveWithTimeout($options['timeout']);
+        } else {
+            $job = $this->pheanstalk->reserve();
+        }
 
         if (!$job instanceof PheanstalkJob) {
             return null;
